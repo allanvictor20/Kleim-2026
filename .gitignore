@@ -29,3 +29,10 @@ Thumbs.db
 *.sqlite3
 # Word lock files
 ~$*.docx
+
+# Frontend build and test output
+frontend/**/dist/
+frontend/**/dev-dist/
+frontend/playwright-report/
+frontend/test-results/
+frontend/**/coverage/

@@ -6,13 +6,16 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import Settings, get_settings
 from app.core.db import check_database, dispose_engine
 from app.core.errors import error_body, register_exception_handlers
+from app.core.idempotency import HEADER as IDEMPOTENCY_HEADER
 from app.core.idempotency import IdempotencyMiddleware
 from app.core.logging import configure_logging, init_sentry
+from app.core.middleware import HEADER as REQUEST_ID_HEADER
 from app.core.middleware import RequestIdMiddleware
 from app.core.redis import check_redis, close_redis
 
@@ -75,9 +78,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Starlette runs the most recently added middleware outermost, so the
     # request id is set before idempotency can replay a cached response and is
-    # therefore present on every log line and error body.
+    # therefore present on every log line and error body. CORS goes outermost of
+    # all: a preflight must be answered even when a later layer would reject the
+    # request, or the browser reports a CORS failure instead of the real error.
     app.add_middleware(IdempotencyMiddleware)
     app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", IDEMPOTENCY_HEADER, REQUEST_ID_HEADER],
+        # Without this the browser hides the header, and a bug report loses the
+        # one id that ties it to a backend log line.
+        expose_headers=[REQUEST_ID_HEADER],
+        max_age=600,
+    )
 
     register_exception_handlers(app)
     register_health_routes(app)

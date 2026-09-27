@@ -9,6 +9,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["development", "test", "staging", "production"]
@@ -62,6 +63,30 @@ class Settings(BaseSettings):
     rider_offer_seconds: int = 45
 
     idempotency_ttl_seconds: int = 60 * 60 * 24
+
+    # Browsers enforce same-origin, and the four apps run on their own ports in
+    # development (README: 5173 customer, 5174 seller, 5175 rider, 5176 admin),
+    # so the API has to name them. An explicit list, never "*": the API answers
+    # with credentials, and a wildcard plus credentials is both refused by
+    # browsers and wrong.
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:5176",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
+        "http://127.0.0.1:5176",
+    ]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _split_origins(cls, value: object) -> object:
+        """Accept a comma-separated CORS_ORIGINS, which is how .env carries a list."""
+        if isinstance(value, str):
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
 
     @property
     def is_production(self) -> bool:

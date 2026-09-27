@@ -57,7 +57,7 @@ cp .env.example .env                 # defaults work for local development
 docker compose up -d                 # api, worker, db, redis, mailpit
 docker compose exec api alembic upgrade head
 docker compose exec api python -m app.scripts.seed   # 5 stores, 20 products, test users
-cd frontend && pnpm install && pnpm dev   # starts all four frontend apps (after M0 scaffolds them)
+cd frontend && pnpm install && pnpm dev   # starts all four frontend apps
 ```
 
 | Service | URL |
@@ -90,7 +90,8 @@ In development, OTP codes are not sent by SMS. They appear in the API logs (`doc
 | New migration | `docker compose exec api alembic revision --autogenerate -m "m5 add orders"` |
 | Frontend tests | `cd frontend && pnpm test` |
 | Frontend lint | `cd frontend && pnpm lint` |
-| Regenerate API client | `pnpm --filter api-client generate` |
+| Regenerate API client | `pnpm --filter @kleim/api-client generate` |
+| Component gallery (every state, both themes) | any app at `/preview`, e.g. http://localhost:5173/preview |
 | End-to-end tests | `cd frontend && pnpm e2e` |
 | Simulate a payment outcome (dev) | `POST /api/v1/dev/payments/{id}/simulate` or the Dev Payments page in the admin app |
 
@@ -106,6 +107,7 @@ See `.env.example` for the full list. The most important:
 | SMS_PROVIDER | `console` or `africastalking` | console |
 | PAYMENT_PROVIDER | `simulated` or aggregator name | simulated |
 | MAPS_PROVIDER | `osm` or `google` | osm |
+| CORS_ORIGINS | Browser origins allowed to call the API | the four dev app ports |
 | CLOUDINARY_URL | Image uploads | empty (uploads stored locally in dev) |
 | SENTRY_DSN | Error reporting | empty |
 
@@ -125,7 +127,7 @@ Current milestone: **A** (core order loop, target end of week 11) — see the Im
 
 | Module | Status |
 | --- | --- |
-| M0 Foundation and platform core | Backend done: `core/`, `audit/`, Alembic with `audit_logs` and `fee_configs`, integration adapters, ARQ worker. Frontend workspace outstanding. |
+| M0 Foundation and platform core | Done. Backend: `core/`, `audit/`, Alembic with `audit_logs` and `fee_configs`, integration adapters, ARQ worker. Frontend: pnpm workspace, design tokens, shared components, generated API client, four app shells. |
 | M1 Identity, profiles and addresses | Next |
 
 ## Team
