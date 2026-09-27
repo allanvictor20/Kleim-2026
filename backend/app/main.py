@@ -1,20 +1,91 @@
 """FastAPI application factory (M0). Routers are registered here as modules are built."""
+from __future__ import annotations
+
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
-app = FastAPI(title="Kleim API", version="0.1.0", docs_url="/docs")
+from app.core.config import Settings, get_settings
+from app.core.db import check_database, dispose_engine
+from app.core.errors import error_body, register_exception_handlers
+from app.core.idempotency import IdempotencyMiddleware
+from app.core.logging import configure_logging, init_sentry
+from app.core.middleware import RequestIdMiddleware
+from app.core.redis import check_redis, close_redis
 
-
-@app.get("/health/live", tags=["Health"])
-def live() -> dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.get("/health/ready", tags=["Health"])
-def ready() -> dict[str, str]:
-    # M0: check database and Redis connectivity here.
-    return {"status": "ok"}
+logger = logging.getLogger(__name__)
 
 
-# Register module routers under /api/v1 as each module is implemented, e.g.:
-# from app.identity.router import router as identity_router
-# app.include_router(identity_router, prefix="/api/v1")
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings: Settings = app.state.settings
+    logger.info("starting api", extra={"environment": settings.app_env})
+    yield
+    await close_redis()
+    dispose_engine()
+
+
+def register_health_routes(app: FastAPI) -> None:
+    @app.get("/health/live", tags=["Health"])
+    def live() -> dict[str, str]:
+        """Liveness: the process is running. Deliberately checks nothing else,
+        so a database blip does not get the container restarted."""
+        return {"status": "ok"}
+
+    @app.get("/health/ready", tags=["Health"])
+    async def ready() -> JSONResponse:
+        """Readiness: refuse traffic unless the database and Redis both answer."""
+        checks: dict[str, str] = {}
+
+        try:
+            check_database()
+            checks["database"] = "ok"
+        except Exception:
+            logger.exception("readiness: database unreachable")
+            checks["database"] = "unavailable"
+
+        try:
+            await check_redis()
+            checks["redis"] = "ok"
+        except Exception:
+            logger.exception("readiness: redis unreachable")
+            checks["redis"] = "unavailable"
+
+        if all(state == "ok" for state in checks.values()):
+            return JSONResponse(content={"status": "ok", "checks": checks})
+
+        body = error_body(
+            "SERVICE_UNAVAILABLE",
+            "A dependency is unavailable",
+            {"checks": checks},
+        )
+        return JSONResponse(status_code=503, content=body)
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or get_settings()
+    configure_logging(settings)
+    init_sentry(settings)
+
+    app = FastAPI(title="Kleim API", version="0.1.0", docs_url="/docs", lifespan=lifespan)
+    app.state.settings = settings
+
+    # Starlette runs the most recently added middleware outermost, so the
+    # request id is set before idempotency can replay a cached response and is
+    # therefore present on every log line and error body.
+    app.add_middleware(IdempotencyMiddleware)
+    app.add_middleware(RequestIdMiddleware)
+
+    register_exception_handlers(app)
+    register_health_routes(app)
+
+    # Register module routers under /api/v1 as each module is implemented, e.g.:
+    # from app.identity.router import router as identity_router
+    # app.include_router(identity_router, prefix="/api/v1")
+    return app
+
+
+app = create_app()

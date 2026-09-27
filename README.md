@@ -86,6 +86,7 @@ In development, OTP codes are not sent by SMS. They appear in the API logs (`doc
 | --- | --- |
 | Backend tests | `docker compose exec api pytest` |
 | Backend lint and types | `docker compose exec api ruff check . && docker compose exec api mypy app` |
+| Install the pre-commit hooks | `pip install pre-commit && pre-commit install` |
 | New migration | `docker compose exec api alembic revision --autogenerate -m "m5 add orders"` |
 | Frontend tests | `cd frontend && pnpm test` |
 | Frontend lint | `cd frontend && pnpm lint` |
@@ -120,7 +121,12 @@ Never commit a real `.env`. CI fails if one is found.
 
 ## Project status
 
-Current milestone: **[A / B / C]** — see the Implementation Plan for module status.
+Current milestone: **A** (core order loop, target end of week 11) — see the Implementation Plan for module status.
+
+| Module | Status |
+| --- | --- |
+| M0 Foundation and platform core | Backend done: `core/`, `audit/`, Alembic with `audit_logs` and `fee_configs`, integration adapters, ARQ worker. Frontend workspace outstanding. |
+| M1 Identity, profiles and addresses | Next |
 
 ## Team
 
