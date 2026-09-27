@@ -1,0 +1,56 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgis/postgis:16-3.4
+        env: { POSTGRES_USER: app, POSTGRES_PASSWORD: app, POSTGRES_DB: app }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U app" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    defaults: { run: { working-directory: backend } }
+    env:
+      DATABASE_URL: postgresql+psycopg://app:app@localhost:5432/app
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: ci-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install uv && uv pip install --system -r pyproject.toml --extra dev
+      - run: ruff check .
+      - run: mypy app
+      - name: Migrations up, down, up
+        if: hashFiles('backend/alembic.ini') != ''
+        run: alembic upgrade head && alembic downgrade base && alembic upgrade head
+      - run: pytest
+
+  frontend:
+    # Runs once M0 has created the apps and committed pnpm-lock.yaml
+    if: ${{ hashFiles('frontend/pnpm-lock.yaml') != '' }}
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm, cache-dependency-path: frontend/pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm test
+
+  secrets-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail if a .env file is committed
+        run: "! git ls-files | grep -E '(^|/)\\.env$'"

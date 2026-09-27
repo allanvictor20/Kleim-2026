@@ -1,0 +1,17 @@
+{
+  "name": "kleim-frontend",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./apps/* dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "e2e": "playwright test",
+    "mock": "prism mock ../docs/api/openapi.yaml"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0",
+    "@stoplight/prism-cli": "^5.10.0",
+    "typescript": "^5.6.0"
+  }
+}

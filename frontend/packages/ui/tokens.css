@@ -1,0 +1,28 @@
+/* Kleim design tokens — UI/UX Style Guide §4. Components must use these variables only. */
+:root {
+  --page: #E9EEF6; --screen: #F6F8FC; --card: #FFFFFF; --ink: #0D1A33; --muted: #536179;
+  --line: #DDE4EF; --chip: #EEF2F8;
+  --btn: #0043D5;          /* Blue 700: primary buttons (white text) */
+  --link: #0060F3;         /* Blue 600: links, selection, focus ring */
+  --sky: #0A81FC;          /* Sky 500: map route, icons */
+  --blue-soft: #E6F0FF;
+  --pink: #FC4B98;         /* Pink 500: hearts, badges, urgency shapes (never text on white) */
+  --pink-text: #B8176A;    /* Pink 700: pink words */
+  --pink-soft: #FFE6F1;
+  --green: #157A4A; --green-soft: #E2F4EA;
+  --amber: #7A4B00; --amber-soft: #FFF1D6;
+  --grad: linear-gradient(120deg, #0043D5 0%, #0A81FC 60%, #8FE6FC 100%);
+  --grad-pink: linear-gradient(120deg, #DA2F8A 0%, #FC4B98 60%, #FBD0E0 100%);
+  --radius-sm: 10px; --radius-md: 14px; --radius-lg: 24px; --radius-pill: 999px;
+  --font: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #070D1A; --screen: #0A1224; --card: #121C33; --ink: #EEF3FB; --muted: #9AA8BF;
+    --line: #22304D; --chip: #1A2540;
+    --btn: #1F5BEA; --link: #6FA8FF; --sky: #4FB3FF; --blue-soft: #15264A;
+    --pink: #FF6AAB; --pink-text: #FF8CC0; --pink-soft: #3D1430;
+    --green: #7FD8A6; --green-soft: #133A28;
+    --amber: #EBC06A; --amber-soft: #3A2E17;
+  }
+}

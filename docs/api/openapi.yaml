@@ -1,0 +1,1029 @@
+openapi: 3.1.0
+info:
+  title: Kleim API
+  version: 1.0.0
+  description: |
+    Contract for modules M1–M5 (identity, catalogue, search, cart/pricing, orders).
+    Aligned with SDD v1.1 §15 and the Implementation Plan. Later modules add their
+    paths to this file before implementation (gate G1).
+    All money values are integer UGX. All timestamps are ISO 8601 UTC.
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development
+  - url: https://staging.example.com/api/v1
+    description: Staging (replace with real host)
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Me
+  - name: Seller catalogue
+  - name: Browse
+  - name: Cart
+  - name: Orders
+  - name: Seller orders
+
+paths:
+  /auth/otp/request:
+    post:
+      tags: [Auth]
+      summary: Send a one-time code by SMS
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone: { type: string, example: "+256700000000", description: E.164 format }
+      responses:
+        '202': { description: Code sent (response is identical whether or not the number is registered) }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/otp/verify:
+    post:
+      tags: [Auth]
+      summary: Verify the code; registers the user on first login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              properties:
+                phone: { type: string }
+                code: { type: string, pattern: '^[0-9]{6}$' }
+      responses:
+        '200':
+          description: Tokens issued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '400': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate refresh token and issue a new access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        '200':
+          description: New tokens
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke the current refresh token
+      responses:
+        '204': { description: Logged out }
+
+  /me:
+    get:
+      tags: [Me]
+      summary: Current user, roles and customer profile
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      tags: [Me]
+      summary: Update profile fields
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfileUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /me/addresses:
+    get:
+      tags: [Me]
+      summary: List saved addresses
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Address' }
+    post:
+      tags: [Me]
+      summary: Save a new address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddressInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Address' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /me/addresses/{address_id}:
+    parameters:
+      - { name: address_id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [Me]
+      summary: Update an address
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddressInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Address' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Me]
+      summary: Delete an address
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /me/favorites:
+    get:
+      tags: [Me]
+      summary: Saved products and stores
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Favorite' }
+    post:
+      tags: [Me]
+      summary: Save a product or store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Favorite' }
+      responses:
+        '201': { description: Saved }
+
+  /seller/stores:
+    post:
+      tags: [Seller catalogue]
+      summary: Create a store (status pending until approved)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StoreInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Store' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /seller/stores/{store_id}:
+    parameters:
+      - { name: store_id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [Seller catalogue]
+      summary: Update own store
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StoreInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Store' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /seller/products:
+    get:
+      tags: [Seller catalogue]
+      summary: List own products (all statuses)
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/ProductStatus' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductPage' }
+    post:
+      tags: [Seller catalogue]
+      summary: Create a product with variants (starts as draft)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductDetail' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /seller/products/{product_id}:
+    parameters:
+      - { name: product_id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [Seller catalogue]
+      summary: Update product fields or status (activation rules apply)
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductDetail' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /seller/products/{product_id}/images:
+    parameters:
+      - { name: product_id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Seller catalogue]
+      summary: Register an uploaded image (after signed upload to Cloudinary)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri }
+                alt_text: { type: string }
+                sort_order: { type: integer }
+      responses:
+        '201': { description: Added }
+
+  /seller/uploads/sign:
+    post:
+      tags: [Seller catalogue]
+      summary: Get a signed Cloudinary upload payload (jpg/png/webp, max 5 MB)
+      responses:
+        '200':
+          description: Signature
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  upload_url: { type: string }
+                  params: { type: object, additionalProperties: true }
+
+  /seller/variants/{variant_id}/stock:
+    parameters:
+      - { name: variant_id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [Seller catalogue]
+      summary: Set stock quantity (cannot go below reserved)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stock_quantity]
+              properties:
+                stock_quantity: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Variant' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /seller/products/import:
+    post:
+      tags: [Seller catalogue]
+      summary: Bulk import products from CSV (all-or-nothing)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201': { description: Imported }
+        '422':
+          description: Row-level errors, nothing written
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /catalog/tags:
+    get:
+      tags: [Browse]
+      summary: Occasion and style vocabularies
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  occasions: { type: array, items: { $ref: '#/components/schemas/Tag' } }
+                  styles: { type: array, items: { $ref: '#/components/schemas/Tag' } }
+
+  /categories:
+    get:
+      tags: [Browse]
+      summary: Category tree
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Category' }
+
+  /products:
+    get:
+      tags: [Browse]
+      summary: Search and filter products
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: occasion, in: query, schema: { type: string, example: wedding } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: size, in: query, schema: { type: string } }
+        - { name: min_price, in: query, schema: { type: integer } }
+        - { name: max_price, in: query, schema: { type: integer } }
+        - { name: address_id, in: query, schema: { type: string, format: uuid }, description: Distance origin }
+        - { name: deliver_today, in: query, schema: { type: boolean }, description: Enabled from M11 }
+        - { name: sort, in: query, schema: { type: string, enum: [best_match, price_asc, price_desc, nearest, newest], default: best_match } }
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductPage' }
+
+  /products/{product_id}:
+    get:
+      tags: [Browse]
+      summary: Product detail with variants and stock
+      security: []
+      parameters:
+        - { name: product_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: address_id, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /stores:
+    get:
+      tags: [Browse]
+      summary: Nearby stores
+      security: []
+      parameters:
+        - { name: address_id, in: query, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Store' } }
+                  next_cursor: { type: [string, 'null'] }
+
+  /stores/{store_id}:
+    get:
+      tags: [Browse]
+      summary: Store detail
+      security: []
+      parameters:
+        - { name: store_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Store' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /cart:
+    get:
+      tags: [Cart]
+      summary: Active cart (empty object if none)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cart' }
+    delete:
+      tags: [Cart]
+      summary: Empty the cart
+      responses:
+        '204': { description: Emptied }
+
+  /cart/items:
+    post:
+      tags: [Cart]
+      summary: Add a variant (409 CART_STORE_CONFLICT if another store)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variant_id, quantity]
+              properties:
+                variant_id: { type: string, format: uuid }
+                quantity: { type: integer, minimum: 1 }
+                replace_cart: { type: boolean, default: false, description: Discard a cart from another store }
+      responses:
+        '201':
+          description: Added
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cart' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /cart/items/{item_id}:
+    parameters:
+      - { name: item_id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [Cart]
+      summary: Change quantity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cart' }
+    delete:
+      tags: [Cart]
+      summary: Remove item
+      responses:
+        '204': { description: Removed }
+
+  /checkout/quote:
+    post:
+      tags: [Cart]
+      summary: Revalidate stock and compute totals, fee and arrives-by
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address_id]
+              properties:
+                address_id: { type: string, format: uuid }
+                coupon_code: { type: string }
+      responses:
+        '200':
+          description: Quote
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Quote' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /orders:
+    post:
+      tags: [Orders]
+      summary: Place an order from the active cart
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address_id, payment_method, try_at_door]
+              properties:
+                address_id: { type: string, format: uuid }
+                payment_method: { $ref: '#/components/schemas/PaymentMethod' }
+                try_at_door: { type: boolean }
+                coupon_code: { type: string }
+                expected_total: { type: integer, description: Total the customer saw; 409 PRICE_CHANGED if different }
+      responses:
+        '201':
+          description: Created in PENDING_SELLER
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /orders/{order_id}:
+    get:
+      tags: [Orders]
+      summary: Order detail with status history (customer or owning seller)
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /orders/{order_id}/cancel:
+    post:
+      tags: [Orders]
+      summary: Customer cancels (only in PENDING_SELLER)
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /customer/orders:
+    get:
+      tags: [Orders]
+      summary: Customer order history, newest first
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderPage' }
+
+  /seller/orders:
+    get:
+      tags: [Seller orders]
+      summary: Seller queue and history
+      parameters:
+        - { name: store_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/OrderStatus' } }
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderPage' }
+
+  /seller/orders/{order_id}/accept:
+    post:
+      tags: [Seller orders]
+      summary: Accept (COD → CONFIRMED → PREPARING; mobile money → AWAITING_PAYMENT)
+      parameters: [ { $ref: '#/components/parameters/OrderId' } ]
+      responses:
+        '200': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /seller/orders/{order_id}/reject:
+    post:
+      tags: [Seller orders]
+      summary: Reject with reason; releases stock
+      parameters: [ { $ref: '#/components/parameters/OrderId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, enum: [out_of_stock, store_closing, other] }
+                note: { type: string }
+      responses:
+        '200': { description: Rejected, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /seller/orders/{order_id}/ready:
+    post:
+      tags: [Seller orders]
+      summary: Mark ready for pickup; creates the delivery (M7)
+      parameters: [ { $ref: '#/components/parameters/OrderId' } ]
+      responses:
+        '200': { description: Ready, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /seller/analytics:
+    get:
+      tags: [Seller orders]
+      summary: Sales totals and best sellers
+      parameters:
+        - { name: store_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: period, in: query, schema: { type: string, enum: [day, week, month], default: day } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sales_total: { type: integer }
+                  orders_count: { type: integer }
+                  acceptance_rate: { type: number }
+                  best_sellers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        product_id: { type: string, format: uuid }
+                        name: { type: string }
+                        units: { type: integer }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+      description: Opaque cursor from next_cursor; 20 items per page
+    OrderId:
+      name: order_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+      description: Same key within 24 h returns the original response
+
+  responses:
+    Error:
+      description: Business rule error
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    ValidationError:
+      description: Request failed validation (code VALIDATION_ERROR)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Unauthorized:
+      description: Missing or invalid token (code UNAUTHORIZED)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: Authenticated but not allowed (code FORBIDDEN)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: Not found or not visible to caller (code NOT_FOUND)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    RateLimited:
+      description: Too many requests (code RATE_LIMITED); see Retry-After header
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: { type: string, example: OUT_OF_STOCK }
+            message: { type: string, example: Selected size is no longer available }
+            details: { type: object, additionalProperties: true }
+            request_id: { type: string }
+
+    TokenPair:
+      type: object
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        expires_in: { type: integer, example: 900 }
+        is_new_user: { type: boolean }
+
+    Role:
+      type: object
+      properties:
+        role: { type: string, enum: [customer, seller, rider, support, finance, admin] }
+        status: { type: string, enum: [pending, approved, suspended] }
+
+    Me:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        phone: { type: string }
+        email: { type: [string, 'null'] }
+        roles: { type: array, items: { $ref: '#/components/schemas/Role' } }
+        profile:
+          type: object
+          properties:
+            display_name: { type: [string, 'null'] }
+            usual_size: { type: [string, 'null'] }
+            preferred_styles: { type: array, items: { type: string } }
+            preferred_colours: { type: array, items: { type: string } }
+            default_address_id: { type: [string, 'null'], format: uuid }
+
+    ProfileUpdate:
+      type: object
+      properties:
+        display_name: { type: string, maxLength: 60 }
+        email: { type: string, format: email }
+        usual_size: { type: string }
+        preferred_styles: { type: array, items: { type: string } }
+        preferred_colours: { type: array, items: { type: string } }
+        default_address_id: { type: string, format: uuid }
+
+    GeoPoint:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat: { type: number, minimum: -1.5, maximum: 4.3, description: Uganda bounds }
+        lng: { type: number, minimum: 29.5, maximum: 35.1 }
+
+    AddressInput:
+      type: object
+      required: [label, location, area, contact_phone]
+      properties:
+        label: { type: string, example: Hostel }
+        location: { $ref: '#/components/schemas/GeoPoint' }
+        area: { type: string, example: Kikoni }
+        landmark: { type: string, example: Blue gate opposite the chapati stand }
+        notes: { type: string }
+        contact_phone: { type: string }
+
+    Address:
+      allOf:
+        - $ref: '#/components/schemas/AddressInput'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            zone: { type: [string, 'null'], description: Active delivery zone or null }
+
+    Favorite:
+      type: object
+      required: [target_type, target_id]
+      properties:
+        target_type: { type: string, enum: [product, store] }
+        target_id: { type: string, format: uuid }
+
+    OpeningHours:
+      type: object
+      description: Local times per weekday; null = closed
+      additionalProperties:
+        type: [object, 'null']
+        properties:
+          open: { type: string, example: "09:00" }
+          close: { type: string, example: "20:00" }
+
+    StoreInput:
+      type: object
+      required: [name, location, opening_hours, prep_minutes, service_radius_km]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        location: { $ref: '#/components/schemas/GeoPoint' }
+        address_text: { type: string }
+        opening_hours: { $ref: '#/components/schemas/OpeningHours' }
+        prep_minutes: { type: integer, minimum: 5, maximum: 120 }
+        service_radius_km: { type: integer, minimum: 1, maximum: 30 }
+        payout_method: { type: string, enum: [mtn, airtel, bank] }
+        payout_account: { type: string }
+
+    Store:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        area: { type: string }
+        status: { type: string, enum: [pending, active, suspended] }
+        is_open: { type: boolean }
+        distance_km: { type: [number, 'null'] }
+        reliability_score: { type: integer }
+
+    Tag:
+      type: object
+      properties:
+        key: { type: string, example: kwanjula }
+        label: { type: string, example: Kwanjula (introduction) }
+
+    Category:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        children: { type: array, items: { $ref: '#/components/schemas/Category' } }
+
+    ProductStatus: { type: string, enum: [draft, active, hidden, removed] }
+
+    VariantInput:
+      type: object
+      required: [size, colour, stock_quantity]
+      properties:
+        sku: { type: string }
+        size: { type: string }
+        colour: { type: string }
+        price_override: { type: [integer, 'null'] }
+        stock_quantity: { type: integer, minimum: 0 }
+
+    Variant:
+      allOf:
+        - $ref: '#/components/schemas/VariantInput'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            available: { type: integer, description: stock − reserved }
+            active: { type: boolean }
+
+    ProductInput:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        category_id: { type: string, format: uuid }
+        base_price: { type: integer, minimum: 500 }
+        style_tags: { type: array, items: { type: string } }
+        occasion_tags: { type: array, items: { type: string }, minItems: 1 }
+        attributes: { type: object, additionalProperties: true }
+        status: { $ref: '#/components/schemas/ProductStatus' }
+        variants: { type: array, items: { $ref: '#/components/schemas/VariantInput' } }
+
+    ProductSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        price: { type: integer }
+        image_url: { type: [string, 'null'] }
+        store: { type: object, properties: { id: { type: string, format: uuid }, name: { type: string } } }
+        distance_km: { type: [number, 'null'] }
+        in_stock: { type: boolean }
+        arrives: { type: [string, 'null'], description: '"today 17:40" or "tomorrow" (M11)' }
+        reasons: { type: array, items: { type: string }, description: Up to 3 (full version in M11) }
+
+    ProductDetail:
+      allOf:
+        - $ref: '#/components/schemas/ProductSummary'
+        - type: object
+          properties:
+            description: { type: string }
+            images: { type: array, items: { type: object, properties: { url: { type: string }, alt_text: { type: string } } } }
+            style_tags: { type: array, items: { type: string } }
+            occasion_tags: { type: array, items: { type: string } }
+            variants: { type: array, items: { $ref: '#/components/schemas/Variant' } }
+            status: { $ref: '#/components/schemas/ProductStatus' }
+
+    ProductPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ProductSummary' } }
+        next_cursor: { type: [string, 'null'] }
+        total_estimate: { type: integer }
+
+    CartItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        variant_id: { type: string, format: uuid }
+        product_name: { type: string }
+        size: { type: string }
+        colour: { type: string }
+        quantity: { type: integer }
+        unit_price: { type: integer }
+        available: { type: integer }
+
+    Cart:
+      type: object
+      properties:
+        id: { type: [string, 'null'], format: uuid }
+        store: { type: [object, 'null'], properties: { id: { type: string, format: uuid }, name: { type: string } } }
+        items: { type: array, items: { $ref: '#/components/schemas/CartItem' } }
+        subtotal: { type: integer }
+
+    Quote:
+      type: object
+      properties:
+        subtotal: { type: integer, example: 145000 }
+        delivery_fee: { type: integer, example: 6000 }
+        small_order_fee: { type: integer, example: 0 }
+        discount: { type: integer, example: 0 }
+        total: { type: integer, example: 151000 }
+        distance_km: { type: number, example: 3.4 }
+        zone: { type: string }
+        arrives_by: { type: string, format: date-time }
+        arrives_today: { type: boolean }
+        warnings: { type: array, items: { type: string }, description: e.g. PRICE_CHANGED on an item }
+
+    PaymentMethod: { type: string, enum: [cod, mtn, airtel] }
+
+    OrderStatus:
+      type: string
+      enum: [PENDING_SELLER, ACCEPTED, AWAITING_PAYMENT, CONFIRMED, PREPARING, READY_FOR_PICKUP, IN_TRANSIT,
+             DELIVERED, PARTIALLY_DELIVERED, RETURNED, DELIVERY_FAILED, REJECTED, EXPIRED,
+             CANCELLED_BY_CUSTOMER, PAYMENT_FAILED, CANCELLED]
+
+    OrderItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        product_name: { type: string }
+        size: { type: string }
+        colour: { type: string }
+        quantity: { type: integer }
+        unit_price: { type: integer }
+        outcome: { type: [string, 'null'], enum: [kept, returned, null] }
+
+    StatusEvent:
+      type: object
+      properties:
+        from_status: { type: [string, 'null'] }
+        to_status: { $ref: '#/components/schemas/OrderStatus' }
+        reason: { type: [string, 'null'] }
+        at: { type: string, format: date-time }
+
+    Order:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: K7M4QX }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        store: { type: object, properties: { id: { type: string, format: uuid }, name: { type: string } } }
+        items: { type: array, items: { $ref: '#/components/schemas/OrderItem' } }
+        subtotal: { type: integer }
+        delivery_fee: { type: integer }
+        discount_total: { type: integer }
+        total: { type: integer }
+        payment_method: { $ref: '#/components/schemas/PaymentMethod' }
+        payment_status: { type: string }
+        try_at_door: { type: boolean }
+        seller_deadline_at: { type: [string, 'null'], format: date-time }
+        promised_by: { type: [string, 'null'], format: date-time }
+        dropoff_code: { type: [string, 'null'], description: Only to the customer, only while IN_TRANSIT (M7) }
+        history: { type: array, items: { $ref: '#/components/schemas/StatusEvent' } }
+        created_at: { type: string, format: date-time }
+
+    OrderPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Order' } }
+        next_cursor: { type: [string, 'null'] }
