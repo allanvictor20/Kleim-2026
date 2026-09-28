@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+@import '@kleim/ui/tokens.css';
+
+/* Tailwind v4 scans the files it can see; the shared components live outside this
+ * app, so point it at them or their classes are stripped from the build. */
+@source '../../../packages/ui/src';

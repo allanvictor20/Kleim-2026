@@ -1,0 +1,248 @@
+/* Kleim design tokens — UI/UX Style Guide section 4.
+ *
+ * The single source of colour, type, spacing and radius for all four apps.
+ * Components use tokens only; a raw hex value in component code fails review
+ * (Style Guide section 4, enforced by the `no-restricted-syntax` ESLint rule).
+ *
+ * Dark theme follows the device setting and can be forced with
+ * `data-theme="light"` or `data-theme="dark"` on <html>; every screen is checked
+ * in both themes before a module exits.
+ */
+
+/* Plus Jakarta Sans, self-hosted. One family keeps the page light (NFR-07:
+ * first customer load under 1.5 MB over 3G). Only the five weights the type
+ * scale uses, with swap so text paints before the font arrives. */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('./assets/fonts/plus-jakarta-sans-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+:root {
+  /* Surfaces */
+  --page: #e9eef6;
+  --screen: #f6f8fc;
+  --card: #ffffff;
+  --chip: #eef2f8;
+  --line: #dde4ef;
+
+  /* Text */
+  --ink: #0d1a33;
+  --muted: #536179;
+  --on-dark: #ffffff;
+
+  /* Kleim blue: the single primary action, links and selection */
+  --btn: #0043d5;
+  --link: #0060f3;
+  --blue-soft: #e6f0ff;
+  --sky: #0a81fc;
+
+  /* Kleim pink: an accent. Pink 500 fails contrast as text on white, so pink
+   * words always use --pink-text (Pink 700). */
+  --pink: #fc4b98;
+  --pink-text: #b8176a;
+  --pink-soft: #ffe6f1;
+
+  /* Status. Always paired with a word, never colour alone. */
+  --green: #157a4a;
+  --green-soft: #e2f4ea;
+  --amber: #7a4b00;
+  --amber-soft: #fff1d6;
+
+  /* At most once per screen: hero, splash, drop-off code panel */
+  --grad: linear-gradient(120deg, #0043d5 0%, #0a81fc 60%, #8fe6fc 100%);
+
+  /* Sidebar surfaces (seller and admin) */
+  --side: #0a1224;
+  --side-2: #121c33;
+  --side-3: #22304d;
+
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Space scale (section 4.3). Screens use 18px side padding. */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 12px;
+  --space-6: 14px;
+  --space-7: 18px;
+  --space-8: 24px;
+  --space-9: 32px;
+  --screen-padding: 18px;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
+
+  /* Elevation is borders first; shadow only on toast and bottom sheets. */
+  --shadow-raised: 0 10px 30px rgb(13 26 51 / 18%);
+
+  /* Minimum touch targets (section 8). Rider actions are taller. */
+  --tap: 44px;
+  --tap-rider: 54px;
+  --button-height: 50px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --page: #070d1a;
+    --screen: #0a1224;
+    --card: #121c33;
+    --chip: #1a2540;
+    --line: #22304d;
+
+    --ink: #eef3fb;
+    --muted: #9aa8bf;
+    --on-dark: #0a1224;
+
+    --btn: #1f5bea;
+    --link: #6fa8ff;
+    --blue-soft: #15264a;
+    --sky: #4fb3ff;
+
+    --pink: #ff6aab;
+    --pink-text: #ff8cc0;
+    --pink-soft: #3d1430;
+
+    --green: #7fd8a6;
+    --green-soft: #133a28;
+    --amber: #ebc06a;
+    --amber-soft: #3a2e17;
+
+    --side: #050a16;
+    --side-2: #0f1830;
+    --side-3: #22304d;
+
+    --shadow-raised: 0 10px 30px rgb(0 0 0 / 45%);
+  }
+}
+
+:root[data-theme='dark'] {
+  --page: #070d1a;
+  --screen: #0a1224;
+  --card: #121c33;
+  --chip: #1a2540;
+  --line: #22304d;
+
+  --ink: #eef3fb;
+  --muted: #9aa8bf;
+  --on-dark: #0a1224;
+
+  --btn: #1f5bea;
+  --link: #6fa8ff;
+  --blue-soft: #15264a;
+  --sky: #4fb3ff;
+
+  --pink: #ff6aab;
+  --pink-text: #ff8cc0;
+  --pink-soft: #3d1430;
+
+  --green: #7fd8a6;
+  --green-soft: #133a28;
+  --amber: #ebc06a;
+  --amber-soft: #3a2e17;
+
+  --side: #050a16;
+  --side-2: #0f1830;
+  --side-3: #22304d;
+
+  --shadow-raised: 0 10px 30px rgb(0 0 0 / 45%);
+}
+
+/* Tailwind v4 reads its palette, fonts and radii from here, so the tokens above
+ * are declared once rather than mirrored in a JS config. */
+@theme inline {
+  --color-page: var(--page);
+  --color-screen: var(--screen);
+  --color-card: var(--card);
+  --color-chip: var(--chip);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-on-dark: var(--on-dark);
+  --color-btn: var(--btn);
+  --color-link: var(--link);
+  --color-blue-soft: var(--blue-soft);
+  --color-sky: var(--sky);
+  --color-pink: var(--pink);
+  --color-pink-text: var(--pink-text);
+  --color-pink-soft: var(--pink-soft);
+  --color-green: var(--green);
+  --color-green-soft: var(--green-soft);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-side: var(--side);
+  --color-side-2: var(--side-2);
+  --color-side-3: var(--side-3);
+
+  --font-sans: var(--font-sans);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-pill: var(--radius-pill);
+
+  /* Type scale (section 4.2) */
+  --text-display: 26px;
+  --text-display--line-height: 30px;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--font-weight: 800;
+  --text-section: 19px;
+  --text-section--line-height: 24px;
+  --text-section--letter-spacing: -0.02em;
+  --text-section--font-weight: 800;
+  --text-body: 15px;
+  --text-body--line-height: 21px;
+  --text-small: 13px;
+  --text-small--line-height: 18px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-code: 27px;
+  --text-code--line-height: 32px;
+  --text-code--letter-spacing: 0.2em;
+  --text-code--font-weight: 800;
+
+  /* Breakpoints (section 4.4) */
+  --breakpoint-phone: 520px;
+  --breakpoint-wide: 1180px;
+}
+
+/* Base layer: sentence-case, token-driven defaults every app inherits. */
+@layer base {
+  html {
+    /* Respect safe areas: headers and bottom bars add env() padding. */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--screen);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: 21px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Focus is always visible: Blue 600, never removed (section 8). */
+  :focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

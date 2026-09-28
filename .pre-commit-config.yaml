@@ -1,0 +1,33 @@
+# Run the fast checks before a commit, so CI is not the first place a lint
+# failure shows up. Install once: `pip install pre-commit && pre-commit install`.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=5120]   # matches the 5 MB image limit in SDD section 21
+      # Mirrors the `secrets-check` CI job: a real .env must never be committed.
+      - id: forbid-new-submodules
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: no-env-file
+        name: refuse a committed .env
+        entry: bash -c 'git diff --cached --name-only | grep -E "(^|/)\.env$" && echo "Never commit .env" && exit 1 || exit 0'
+        language: system
+        pass_filenames: false
